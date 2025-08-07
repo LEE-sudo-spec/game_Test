@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>팩맨 게임</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            flex-direction: column;
+            text-align: center;
+        }
+        canvas {
+            background-color: #000;
+            border: 5px solid #0000FF;
+            border-radius: 10px;
+            box-shadow: 0 0 20px #0000FF;
+            outline: none; /* 포커스 시 외곽선 제거 */
+        }
+        #game-container {
+            padding: 20px;
+            border: 2px solid #FFFF00;
+            border-radius: 15px;
+            background-color: #111;
+            box-shadow: 0 0 15px #FFFF00;
+        }
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 0;
+            font-size: 1.2rem;
+            color: #FFFF00;
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #FFFF00;
+            padding: 30px;
+            border-radius: 10px;
+            border: 3px solid #FFFF00;
+            font-size: 2rem;
+            text-align: center;
+            z-index: 10;
+            display: none; /* 초기에는 숨김 */
+        }
+        #message-box button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #FFFF00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+         #message-box button:hover {
+            background-color: #fff;
+         }
+    </style>
+</head>
+<body class="bg-black flex flex-col justify-center items-center min-h-screen">
+
+    <h1 class="text-4xl text-yellow-300 mb-4">팩맨</h1>
+
+    <div id="game-container">
+        <div class="info-panel">
+            <div id="score">점수: 0</div>
+            <div id="lives">목숨: 3</div>
+        </div>
+        <canvas id="gameCanvas" width="560" height="620" tabindex="0"></canvas>
+    </div>
+
+    <div id="message-box">
+        <p id="message-text"></p>
+        <button id="restart-button">다시 시작</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const livesEl = document.getElementById('lives');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const restartButton = document.getElementById('restart-button');
+
+        const TILE_SIZE = 20;
+        let map = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
+            [1,3,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,3,1],
+            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,0,1],
+            [1,0,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,0,1,1,1,1,1,2,1,1,2,1,1,1,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,2,2,2,2,2,2,2,2,2,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,1,1,1,4,4,1,1,1,2,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,1,2,2,2,2,2,2,1,2,1,1,0,1,1,1,1,1,1],
+            [2,2,2,2,2,2,0,0,0,2,1,2,2,2,2,2,2,1,2,0,0,0,2,2,2,2,2,2],
+            [1,1,1,1,1,1,0,1,1,2,1,2,2,2,2,2,2,1,2,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,2,2,2,2,2,2,2,2,2,1,1,0,1,1,1,1,1,1],
+            [1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
+            [1,3,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,3,1],
+            [1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1],
+            [1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1],
+            [1,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        // 1: wall, 0: dot, 2: empty, 3: power pellet, 4: ghost spawn
+
+        let score = 0;
+        let lives = 3;
+        let pelletsCount = 0;
+        let pacman;
+        let ghosts = [];
+        let powerPelletActive = false;
+        let powerPelletTimer = 0;
+        let ghostScaredTimer = 0;
+        let gameOver = false;
+
+        class Pacman {
+            constructor(x, y, speed) {
+                this.x = x;
+                this.y = y;
+                this.speed = speed;
+                this.radius = TILE_SIZE / 2 - 2;
+                this.mouthOpen = 0.2;
+                this.mouthOpening = true;
+                this.direction = { x: 0, y: 0 };
+                this.nextDirection = { x: 0, y: 0 };
+                this.rotation = 0;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, this.mouthOpen * Math.PI, (2 - this.mouthOpen) * Math.PI);
+                ctx.lineTo(0, 0);
+                ctx.fillStyle = 'yellow';
+                ctx.fill();
+                ctx.closePath();
+                ctx.restore();
+            }
+
+            update() {
+                this.updateMouth();
+                this.move();
+                this.eat();
+            }
+            
+            updateMouth() {
+                if (this.mouthOpening) {
+                    this.mouthOpen += 0.05;
+                    if (this.mouthOpen >= 0.4) this.mouthOpening = false;
+                } else {
+                    this.mouthOpen -= 0.05;
+                    if (this.mouthOpen <= 0.01) this.mouthOpening = true;
+                }
+            }
+
+            move() {
+                // 터널 통과 로직
+                if (this.x < 0) this.x = canvas.width;
+                if (this.x > canvas.width) this.x = 0;
+
+                const currentTileX = Math.floor(this.x / TILE_SIZE);
+                const currentTileY = Math.floor(this.y / TILE_SIZE);
+                
+                // 다음 방향으로 전환 가능한지 확인
+                if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
+                    if (!this.isColliding(this.x, this.y, this.nextDirection)) {
+                         this.direction = {...this.nextDirection};
+                         this.nextDirection = {x: 0, y: 0};
+                         this.updateRotation();
+                    }
+                }
+                
+                // 현재 방향으로 계속 이동
+                if (!this.isColliding(this.x, this.y, this.direction)) {
+                    this.x += this.direction.x * this.speed;
+                    this.y += this.direction.y * this.speed;
+                }
+            }
+
+            isColliding(x, y, dir) {
+                const checkMargin = TILE_SIZE / 2;
+                let nextX = x + dir.x * this.speed;
+                let nextY = y + dir.y * this.speed;
+
+                const tileX = Math.floor(nextX / TILE_SIZE);
+                const tileY = Math.floor(nextY / TILE_SIZE);
+
+                // 상하 이동 시 좌우 경계 체크
+                if (dir.y !== 0) {
+                    const leftTile = Math.floor((nextX - this.radius) / TILE_SIZE);
+                    const rightTile = Math.floor((nextX + this.radius) / TILE_SIZE);
+                    if (map[tileY] && (map[tileY][leftTile] === 1 || map[tileY][rightTile] === 1)) {
+                        return true;
+                    }
+                }
+
+                // 좌우 이동 시 상하 경계 체크
+                if (dir.x !== 0) {
+                    const topTile = Math.floor((nextY - this.radius) / TILE_SIZE);
+                    const bottomTile = Math.floor((nextY + this.radius) / TILE_SIZE);
+                    if (map[topTile] && map[bottomTile] && (map[topTile][tileX] === 1 || map[bottomTile][tileX] === 1)) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            
+            updateRotation() {
+                if (this.direction.x === 1) this.rotation = 0; // Right
+                else if (this.direction.x === -1) this.rotation = Math.PI; // Left
+                else if (this.direction.y === 1) this.rotation = 0.5 * Math.PI; // Down
+                else if (this.direction.y === -1) this.rotation = 1.5 * Math.PI; // Up
+            }
+
+            eat() {
+                const tileX = Math.floor(this.x / TILE_SIZE);
+                const tileY = Math.floor(this.y / TILE_SIZE);
+                if (tileX >= 0 && tileX < map[0].length && tileY >= 0 && tileY < map.length) {
+                    if (map[tileY][tileX] === 0) {
+                        map[tileY][tileX] = 2; // 빈 공간으로 변경
+                        score += 10;
+                        pelletsCount--;
+                        updateScore();
+                    } else if (map[tileY][tileX] === 3) {
+                        map[tileY][tileX] = 2;
+                        score += 50;
+                        activatePowerPellet();
+                        updateScore();
+                    }
+                }
+            }
+        }
+
+        class Ghost {
+            constructor(x, y, speed, color) {
+                this.x = x;
+                this.y = y;
+                this.speed = speed;
+                this.radius = TILE_SIZE / 2 - 2;
+                this.color = color;
+                this.direction = { x: 0, y: 0 };
+                this.isScared = false;
+                this.isEaten = false;
+                this.spawnPoint = {x, y};
+            }
+
+            draw() {
+                ctx.beginPath();
+                let drawColor = this.isScared ? '#0000FF' : this.color;
+                if (this.isEaten) {
+                    // 먹힌 상태 (눈만 그리기)
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.arc(this.x - 4, this.y, 2, 0, Math.PI * 2);
+                    ctx.arc(this.x + 4, this.y, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    return;
+                }
+
+                ctx.fillStyle = drawColor;
+                ctx.arc(this.x, this.y, this.radius, Math.PI, 0);
+                ctx.fillRect(this.x - this.radius, this.y, this.radius * 2, this.radius);
+                
+                // Wavy bottom
+                ctx.moveTo(this.x - this.radius, this.y + this.radius);
+                ctx.quadraticCurveTo(this.x - this.radius / 2, this.y + this.radius - 5, this.x, this.y + this.radius);
+                ctx.quadraticCurveTo(this.x + this.radius / 2, this.y + this.radius + 5, this.x + this.radius, this.y + this.radius);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.x - 4, this.y - 2, 3, 0, Math.PI * 2);
+                ctx.arc(this.x + 4, this.y - 2, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.x - 3, this.y - 2, 1, 0, Math.PI * 2);
+                ctx.arc(this.x + 5, this.y - 2, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            update() {
+                if (this.isEaten) {
+                    this.returnToSpawn();
+                } else {
+                    this.move();
+                }
+            }
+
+            move() {
+                const currentTileX = Math.floor(this.x / TILE_SIZE);
+                const currentTileY = Math.floor(this.y / TILE_SIZE);
+                
+                // 교차로나 막다른 길에서 방향 전환
+                if (this.isAtIntersection(currentTileX, currentTileY)) {
+                    this.changeDirection(currentTileX, currentTileY);
+                }
+
+                if (!this.isColliding(this.x, this.y, this.direction)) {
+                    this.x += this.direction.x * this.speed;
+                    this.y += this.direction.y * this.speed;
+                } else {
+                    // 벽에 부딪히면 방향 다시 설정
+                    this.changeDirection(currentTileX, currentTileY);
+                }
+            }
+
+            isAtIntersection(tileX, tileY) {
+                 // 정확히 타일 중앙에 있을 때만 방향 전환을 고려
+                if (Math.abs(this.x - (tileX * TILE_SIZE + TILE_SIZE / 2)) > this.speed ||
+                    Math.abs(this.y - (tileY * TILE_SIZE + TILE_SIZE / 2)) > this.speed) {
+                    return false;
+                }
+                
+                let possibleWays = 0;
+                const directions = [{x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}];
+                for (const dir of directions) {
+                    if (map[tileY + dir.y] && map[tileY + dir.y][tileX + dir.x] !== 1) {
+                        possibleWays++;
+                    }
+                }
+                return possibleWays > 2;
+            }
+
+            changeDirection(tileX, tileY) {
+                const possibleDirections = [];
+                const directions = [{x:0, y:-1, name: 'up'}, {x:0, y:1, name: 'down'}, {x:-1, y:0, name: 'left'}, {x:1, y:0, name: 'right'}];
+                
+                for(const dir of directions) {
+                    // 현재 진행 방향의 반대로는 가지 않음 (막다른 길 제외)
+                    if (dir.x === -this.direction.x && dir.y === -this.direction.y) continue;
+
+                    if (!this.isColliding(this.x, this.y, dir)) {
+                        possibleDirections.push(dir);
+                    }
+                }
+                
+                if (possibleDirections.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * possibleDirections.length);
+                    this.direction = possibleDirections[randomIndex];
+                } else {
+                    // 막다른 길이면 뒤로 돌아감
+                    this.direction.x *= -1;
+                    this.direction.y *= -1;
+                }
+            }
+            
+            isColliding(x, y, dir) {
+                const nextX = x + dir.x * this.speed;
+                const nextY = y + dir.y * this.speed;
+
+                const tileX = Math.floor(nextX / TILE_SIZE);
+                const tileY = Math.floor(nextY / TILE_SIZE);
+
+                if (dir.y !== 0) {
+                    const leftTile = Math.floor((nextX - this.radius) / TILE_SIZE);
+                    const rightTile = Math.floor((nextX + this.radius) / TILE_SIZE);
+                     if (map[tileY] && (map[tileY][leftTile] === 1 || map[tileY][rightTile] === 1)) {
+                        return true;
+                    }
+                }
+
+                if (dir.x !== 0) {
+                    const topTile = Math.floor((nextY - this.radius) / TILE_SIZE);
+                    const bottomTile = Math.floor((nextY + this.radius) / TILE_SIZE);
+                     if (map[topTile] && map[bottomTile] && (map[topTile][tileX] === 1 || map[bottomTile][tileX] === 1)) {
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+
+            returnToSpawn() {
+                const dx = this.spawnPoint.x - this.x;
+                const dy = this.spawnPoint.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < this.speed) {
+                    this.x = this.spawnPoint.x;
+                    this.y = this.spawnPoint.y;
+                    this.isEaten = false;
+                    this.isScared = false;
+                } else {
+                    this.x += (dx / distance) * this.speed * 2; // 스폰 지점으로 더 빨리 이동
+                    this.y += (dy / distance) * this.speed * 2;
+                }
+            }
+        }
+
+        function init() {
+            score = 0;
+            lives = 3;
+            pelletsCount = 0;
+            gameOver = false;
+            powerPelletActive = false;
+            messageBox.style.display = 'none';
+
+            // 맵 복사 및 펠렛 수 계산
+            map = JSON.parse(JSON.stringify(originalMap));
+            for (let y = 0; y < map.length; y++) {
+                for (let x = 0; x < map[y].length; x++) {
+                    if (map[y][x] === 0) {
+                        pelletsCount++;
+                    }
+                }
+            }
+            
+            pacman = new Pacman(TILE_SIZE * 14, TILE_SIZE * 23.5, 2);
+            ghosts = [
+                new Ghost(TILE_SIZE * 13.5, TILE_SIZE * 11.5, 1.8, 'red'), // Blinky
+                new Ghost(TILE_SIZE * 14.5, TILE_SIZE * 13.5, 1.8, 'pink'), // Pinky
+                new Ghost(TILE_SIZE * 12.5, TILE_SIZE * 13.5, 1.8, 'cyan'), // Inky
+                new Ghost(TILE_SIZE * 15.5, TILE_SIZE * 13.5, 1.8, 'orange') // Clyde
+            ];
+            
+            ghosts.forEach(ghost => ghost.changeDirection(Math.floor(ghost.x/TILE_SIZE), Math.floor(ghost.y/TILE_SIZE)));
+
+
+            updateScore();
+            updateLives();
+            canvas.focus(); // *** FIX: 게임 시작 시 캔버스에 포커스를 줍니다. ***
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            gameLoop();
+        }
+        
+        const originalMap = JSON.parse(JSON.stringify(map));
+        let animationFrameId;
+
+        function drawMap() {
+            for (let y = 0; y < map.length; y++) {
+                for (let x = 0; x < map[y].length; x++) {
+                    if (map[y][x] === 1) { // Wall
+                        ctx.fillStyle = '#0000FF';
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else if (map[y][x] === 0) { // Dot
+                        ctx.beginPath();
+                        ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = 'white';
+                        ctx.fill();
+                    } else if (map[y][x] === 3) { // Power Pellet
+                        ctx.beginPath();
+                        ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 7, 0, Math.PI * 2);
+                        ctx.fillStyle = 'white';
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        function updateScore() {
+            scoreEl.textContent = `점수: ${score}`;
+        }
+        
+        function updateLives() {
+            livesEl.textContent = `목숨: ${lives}`;
+        }
+
+        function activatePowerPellet() {
+            powerPelletActive = true;
+            ghosts.forEach(ghost => {
+                if (!ghost.isEaten) ghost.isScared = true;
+            });
+            clearTimeout(powerPelletTimer);
+            powerPelletTimer = setTimeout(() => {
+                powerPelletActive = false;
+                ghosts.forEach(ghost => ghost.isScared = false);
+            }, 8000); // 8초간 지속
+        }
+        
+        function checkCollisions() {
+            for (const ghost of ghosts) {
+                const dx = pacman.x - ghost.x;
+                const dy = pacman.y - ghost.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < pacman.radius + ghost.radius) {
+                    if (ghost.isScared && !ghost.isEaten) {
+                        ghost.isEaten = true;
+                        score += 200;
+                        updateScore();
+                    } else if (!ghost.isScared && !ghost.isEaten) {
+                        handleDeath();
+                        return; // 한 번만 죽음 처리
+                    }
+                }
+            }
+        }
+
+        function handleDeath() {
+            lives--;
+            updateLives();
+            if (lives <= 0) {
+                endGame(false);
+            } else {
+                resetPositions();
+            }
+        }
+        
+        function resetPositions() {
+            pacman.x = TILE_SIZE * 14;
+            pacman.y = TILE_SIZE * 23.5;
+            pacman.direction = {x: 0, y: 0};
+            pacman.nextDirection = {x: 0, y: 0};
+
+            ghosts.forEach(ghost => {
+                ghost.x = ghost.spawnPoint.x;
+                ghost.y = ghost.spawnPoint.y;
+                ghost.isEaten = false;
+                ghost.isScared = false;
+            });
+        }
+
+        function endGame(isWin) {
+            gameOver = true;
+            cancelAnimationFrame(animationFrameId);
+            messageBox.style.display = 'block';
+            if (isWin) {
+                messageText.textContent = `승리! 최종 점수: ${score}`;
+            } else {
+                messageText.textContent = `게임 오버! 최종 점수: ${score}`;
+            }
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawMap();
+            
+            pacman.update();
+            pacman.draw();
+
+            ghosts.forEach(ghost => {
+                ghost.update();
+                ghost.draw();
+            });
+
+            checkCollisions();
+
+            if (pelletsCount <= 0) {
+                endGame(true);
+            }
+            
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // e.preventDefault()는 페이지 스크롤과 같은 기본 동작을 막습니다.
+            e.preventDefault();
+            const key = e.key;
+            let nextDir = {x: 0, y: 0};
+            if (key === 'ArrowUp') nextDir = { x: 0, y: -1 };
+            if (key === 'ArrowDown') nextDir = { x: 0, y: 1 };
+            if (key === 'ArrowLeft') nextDir = { x: -1, y: 0 };
+            if (key === 'ArrowRight') nextDir = { x: 1, y: 0 };
+
+            if(nextDir.x !== 0 || nextDir.y !== 0) {
+                pacman.nextDirection = nextDir;
+            }
+        });
+        
+        restartButton.addEventListener('click', init);
+
+        init();
+    </script>
+</body>
+</html>
