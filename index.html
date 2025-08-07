@@ -3,599 +3,532 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팩맨 게임</title>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>갤럭시 슈터</title>
     <style>
         body {
-            font-family: 'Press Start 2P', cursive;
-            background-color: #000;
-            color: #fff;
+            margin: 0;
+            padding: 0;
+            background: #000;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            margin: 0;
-            flex-direction: column;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            position: relative;
             text-align: center;
         }
+        
         canvas {
-            background-color: #000;
-            border: 5px solid #0000FF;
-            border-radius: 10px;
-            box-shadow: 0 0 20px #0000FF;
-            outline: none; /* 포커스 시 외곽선 제거 */
+            border: 2px solid #0ff;
+            box-shadow: 0 0 20px #0ff;
+            background: linear-gradient(to bottom, #000 0%, #0a0a2e 100%);
         }
-        #game-container {
-            padding: 20px;
-            border: 2px solid #FFFF00;
-            border-radius: 15px;
-            background-color: #111;
-            box-shadow: 0 0 15px #FFFF00;
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #0ff;
+            font-size: 18px;
+            text-shadow: 0 0 10px #0ff;
+            z-index: 10;
         }
-        .info-panel {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            padding: 10px 0;
-            font-size: 1.2rem;
-            color: #FFFF00;
-        }
-        #message-box {
+        
+        #gameOver {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #FFFF00;
-            padding: 30px;
-            border-radius: 10px;
-            border: 3px solid #FFFF00;
-            font-size: 2rem;
+            color: #ff0;
+            font-size: 36px;
+            text-shadow: 0 0 20px #ff0;
+            display: none;
             text-align: center;
-            z-index: 10;
-            display: none; /* 초기에는 숨김 */
+            z-index: 20;
         }
-        #message-box button {
+        
+        #instructions {
+            color: #0ff;
             margin-top: 20px;
-            padding: 10px 20px;
-            font-family: 'Press Start 2P', cursive;
-            background-color: #FFFF00;
-            color: #000;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1rem;
+            font-size: 14px;
+            text-shadow: 0 0 5px #0ff;
         }
-         #message-box button:hover {
-            background-color: #fff;
-         }
+        
+        .glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes glow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
     </style>
 </head>
-<body class="bg-black flex flex-col justify-center items-center min-h-screen">
-
-    <h1 class="text-4xl text-yellow-300 mb-4">팩맨</h1>
-
-    <div id="game-container">
-        <div class="info-panel">
-            <div id="score">점수: 0</div>
-            <div id="lives">목숨: 3</div>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div>SCORE: <span id="score">0</span></div>
+            <div>LIVES: <span id="lives">3</span></div>
+            <div>WAVE: <span id="wave">1</span></div>
         </div>
-        <canvas id="gameCanvas" width="560" height="620" tabindex="0"></canvas>
-    </div>
-
-    <div id="message-box">
-        <p id="message-text"></p>
-        <button id="restart-button">다시 시작</button>
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOver">
+            <div>GAME OVER</div>
+            <div style="font-size: 20px; margin-top: 10px;">Final Score: <span id="finalScore">0</span></div>
+            <div style="font-size: 16px; margin-top: 20px;">Press SPACE to restart</div>
+        </div>
+        <div id="instructions">
+            <div>← → Arrow Keys: Move | SPACE: Fire | P: Pause</div>
+        </div>
     </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const scoreEl = document.getElementById('score');
-        const livesEl = document.getElementById('lives');
-        const messageBox = document.getElementById('message-box');
-        const messageText = document.getElementById('message-text');
-        const restartButton = document.getElementById('restart-button');
+        canvas.width = 800;
+        canvas.height = 600;
 
-        const TILE_SIZE = 20;
-        let map = [
-            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
-            [1,3,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,3,1],
-            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,0,1],
-            [1,0,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,0,1],
-            [1,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,1,1,1,1,1,2,1,1,2,1,1,1,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,2,2,2,2,2,2,2,2,2,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,1,1,1,4,4,1,1,1,2,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,1,2,2,2,2,2,2,1,2,1,1,0,1,1,1,1,1,1],
-            [2,2,2,2,2,2,0,0,0,2,1,2,2,2,2,2,2,1,2,0,0,0,2,2,2,2,2,2],
-            [1,1,1,1,1,1,0,1,1,2,1,2,2,2,2,2,2,1,2,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,2,2,2,2,2,2,2,2,2,1,1,0,1,1,1,1,1,1],
-            [1,1,1,1,1,1,0,1,1,2,1,1,1,1,1,1,1,1,2,1,1,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,1,1,1,1,0,1,1,1,1,1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,1],
-            [1,3,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,3,1],
-            [1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1],
-            [1,1,1,0,1,1,0,1,1,0,1,1,1,1,1,1,1,1,0,1,1,0,1,1,0,1,1,1],
-            [1,0,0,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,1],
-            [1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1],
-            [1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
-        ];
-        // 1: wall, 0: dot, 2: empty, 3: power pellet, 4: ghost spawn
-
+        // Game state
+        let gameRunning = true;
+        let gamePaused = false;
         let score = 0;
         let lives = 3;
-        let pelletsCount = 0;
-        let pacman;
-        let ghosts = [];
-        let powerPelletActive = false;
-        let powerPelletTimer = 0;
-        let ghostScaredTimer = 0;
-        let gameOver = false;
+        let wave = 1;
+        let stars = [];
+        let particles = [];
+        let powerUps = [];
 
-        class Pacman {
-            constructor(x, y, speed) {
+        // Player
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 60,
+            width: 40,
+            height: 40,
+            speed: 7,
+            bullets: [],
+            fireRate: 0,
+            maxFireRate: 5
+        };
+
+        // Enemies
+        let enemies = [];
+        let enemyBullets = [];
+
+        // Controls
+        const keys = {};
+
+        // Star background
+        class Star {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2;
+                this.speed = Math.random() * 2 + 0.5;
+                this.brightness = Math.random();
+            }
+
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height) {
+                    this.y = 0;
+                    this.x = Math.random() * canvas.width;
+                }
+                this.brightness = Math.sin(Date.now() * 0.001 + this.x) * 0.5 + 0.5;
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.brightness})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        // Particle effect
+        class Particle {
+            constructor(x, y, color) {
                 this.x = x;
                 this.y = y;
-                this.speed = speed;
-                this.radius = TILE_SIZE / 2 - 2;
-                this.mouthOpen = 0.2;
-                this.mouthOpening = true;
-                this.direction = { x: 0, y: 0 };
-                this.nextDirection = { x: 0, y: 0 };
-                this.rotation = 0;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.size = Math.random() * 3 + 1;
+                this.life = 1;
+                this.color = color;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= 0.02;
+                this.size *= 0.98;
             }
 
             draw() {
                 ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.rotation);
-                ctx.beginPath();
-                ctx.arc(0, 0, this.radius, this.mouthOpen * Math.PI, (2 - this.mouthOpen) * Math.PI);
-                ctx.lineTo(0, 0);
-                ctx.fillStyle = 'yellow';
-                ctx.fill();
-                ctx.closePath();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
                 ctx.restore();
-            }
-
-            update() {
-                this.updateMouth();
-                this.move();
-                this.eat();
-            }
-            
-            updateMouth() {
-                if (this.mouthOpening) {
-                    this.mouthOpen += 0.05;
-                    if (this.mouthOpen >= 0.4) this.mouthOpening = false;
-                } else {
-                    this.mouthOpen -= 0.05;
-                    if (this.mouthOpen <= 0.01) this.mouthOpening = true;
-                }
-            }
-
-            move() {
-                // 터널 통과 로직
-                if (this.x < 0) this.x = canvas.width;
-                if (this.x > canvas.width) this.x = 0;
-
-                const currentTileX = Math.floor(this.x / TILE_SIZE);
-                const currentTileY = Math.floor(this.y / TILE_SIZE);
-                
-                // 다음 방향으로 전환 가능한지 확인
-                if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
-                    if (!this.isColliding(this.x, this.y, this.nextDirection)) {
-                         this.direction = {...this.nextDirection};
-                         this.nextDirection = {x: 0, y: 0};
-                         this.updateRotation();
-                    }
-                }
-                
-                // 현재 방향으로 계속 이동
-                if (!this.isColliding(this.x, this.y, this.direction)) {
-                    this.x += this.direction.x * this.speed;
-                    this.y += this.direction.y * this.speed;
-                }
-            }
-
-            isColliding(x, y, dir) {
-                const checkMargin = TILE_SIZE / 2;
-                let nextX = x + dir.x * this.speed;
-                let nextY = y + dir.y * this.speed;
-
-                const tileX = Math.floor(nextX / TILE_SIZE);
-                const tileY = Math.floor(nextY / TILE_SIZE);
-
-                // 상하 이동 시 좌우 경계 체크
-                if (dir.y !== 0) {
-                    const leftTile = Math.floor((nextX - this.radius) / TILE_SIZE);
-                    const rightTile = Math.floor((nextX + this.radius) / TILE_SIZE);
-                    if (map[tileY] && (map[tileY][leftTile] === 1 || map[tileY][rightTile] === 1)) {
-                        return true;
-                    }
-                }
-
-                // 좌우 이동 시 상하 경계 체크
-                if (dir.x !== 0) {
-                    const topTile = Math.floor((nextY - this.radius) / TILE_SIZE);
-                    const bottomTile = Math.floor((nextY + this.radius) / TILE_SIZE);
-                    if (map[topTile] && map[bottomTile] && (map[topTile][tileX] === 1 || map[bottomTile][tileX] === 1)) {
-                        return true;
-                    }
-                }
-                
-                return false;
-            }
-            
-            updateRotation() {
-                if (this.direction.x === 1) this.rotation = 0; // Right
-                else if (this.direction.x === -1) this.rotation = Math.PI; // Left
-                else if (this.direction.y === 1) this.rotation = 0.5 * Math.PI; // Down
-                else if (this.direction.y === -1) this.rotation = 1.5 * Math.PI; // Up
-            }
-
-            eat() {
-                const tileX = Math.floor(this.x / TILE_SIZE);
-                const tileY = Math.floor(this.y / TILE_SIZE);
-                if (tileX >= 0 && tileX < map[0].length && tileY >= 0 && tileY < map.length) {
-                    if (map[tileY][tileX] === 0) {
-                        map[tileY][tileX] = 2; // 빈 공간으로 변경
-                        score += 10;
-                        pelletsCount--;
-                        updateScore();
-                    } else if (map[tileY][tileX] === 3) {
-                        map[tileY][tileX] = 2;
-                        score += 50;
-                        activatePowerPellet();
-                        updateScore();
-                    }
-                }
             }
         }
 
-        class Ghost {
-            constructor(x, y, speed, color) {
+        // Enemy class
+        class Enemy {
+            constructor(x, y, type) {
                 this.x = x;
                 this.y = y;
-                this.speed = speed;
-                this.radius = TILE_SIZE / 2 - 2;
-                this.color = color;
-                this.direction = { x: 0, y: 0 };
-                this.isScared = false;
-                this.isEaten = false;
-                this.spawnPoint = {x, y};
+                this.type = type;
+                this.width = type === 'boss' ? 60 : 30;
+                this.height = type === 'boss' ? 60 : 30;
+                this.speed = type === 'boss' ? 1 : 2;
+                this.health = type === 'boss' ? 10 : 1;
+                this.points = type === 'boss' ? 500 : 100;
+                this.fireRate = 0;
+                this.maxFireRate = type === 'boss' ? 30 : 60;
+                this.movePattern = Math.random() > 0.5 ? 'sine' : 'straight';
+                this.time = 0;
+            }
+
+            update() {
+                this.time++;
+                if (this.movePattern === 'sine') {
+                    this.x += Math.sin(this.time * 0.05) * 2;
+                }
+                this.y += this.speed;
+
+                // Fire bullets
+                this.fireRate++;
+                if (this.fireRate >= this.maxFireRate) {
+                    this.fireRate = 0;
+                    enemyBullets.push({
+                        x: this.x + this.width / 2,
+                        y: this.y + this.height,
+                        speed: 4,
+                        width: 4,
+                        height: 10
+                    });
+                }
             }
 
             draw() {
+                ctx.fillStyle = this.type === 'boss' ? '#f0f' : '#f00';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.type === 'boss' ? '#f0f' : '#f00';
+                
+                // Draw enemy ship
                 ctx.beginPath();
-                let drawColor = this.isScared ? '#0000FF' : this.color;
-                if (this.isEaten) {
-                    // 먹힌 상태 (눈만 그리기)
-                    ctx.fillStyle = 'white';
-                    ctx.beginPath();
-                    ctx.arc(this.x - 4, this.y, 2, 0, Math.PI * 2);
-                    ctx.arc(this.x + 4, this.y, 2, 0, Math.PI * 2);
-                    ctx.fill();
-                    return;
-                }
-
-                ctx.fillStyle = drawColor;
-                ctx.arc(this.x, this.y, this.radius, Math.PI, 0);
-                ctx.fillRect(this.x - this.radius, this.y, this.radius * 2, this.radius);
-                
-                // Wavy bottom
-                ctx.moveTo(this.x - this.radius, this.y + this.radius);
-                ctx.quadraticCurveTo(this.x - this.radius / 2, this.y + this.radius - 5, this.x, this.y + this.radius);
-                ctx.quadraticCurveTo(this.x + this.radius / 2, this.y + this.radius + 5, this.x + this.radius, this.y + this.radius);
+                ctx.moveTo(this.x + this.width / 2, this.y);
+                ctx.lineTo(this.x, this.y + this.height);
+                ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.7);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
                 ctx.fill();
-
-                // Eyes
-                ctx.fillStyle = 'white';
-                ctx.beginPath();
-                ctx.arc(this.x - 4, this.y - 2, 3, 0, Math.PI * 2);
-                ctx.arc(this.x + 4, this.y - 2, 3, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.fillStyle = 'black';
-                ctx.beginPath();
-                ctx.arc(this.x - 3, this.y - 2, 1, 0, Math.PI * 2);
-                ctx.arc(this.x + 5, this.y - 2, 1, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            update() {
-                if (this.isEaten) {
-                    this.returnToSpawn();
-                } else {
-                    this.move();
-                }
-            }
-
-            move() {
-                const currentTileX = Math.floor(this.x / TILE_SIZE);
-                const currentTileY = Math.floor(this.y / TILE_SIZE);
                 
-                // 교차로나 막다른 길에서 방향 전환
-                if (this.isAtIntersection(currentTileX, currentTileY)) {
-                    this.changeDirection(currentTileX, currentTileY);
-                }
-
-                if (!this.isColliding(this.x, this.y, this.direction)) {
-                    this.x += this.direction.x * this.speed;
-                    this.y += this.direction.y * this.speed;
-                } else {
-                    // 벽에 부딪히면 방향 다시 설정
-                    this.changeDirection(currentTileX, currentTileY);
-                }
+                ctx.shadowBlur = 0;
             }
 
-            isAtIntersection(tileX, tileY) {
-                 // 정확히 타일 중앙에 있을 때만 방향 전환을 고려
-                if (Math.abs(this.x - (tileX * TILE_SIZE + TILE_SIZE / 2)) > this.speed ||
-                    Math.abs(this.y - (tileY * TILE_SIZE + TILE_SIZE / 2)) > this.speed) {
-                    return false;
+            takeDamage() {
+                this.health--;
+                for (let i = 0; i < 5; i++) {
+                    particles.push(new Particle(
+                        this.x + this.width / 2,
+                        this.y + this.height / 2,
+                        this.type === 'boss' ? '#f0f' : '#f00'
+                    ));
                 }
-                
-                let possibleWays = 0;
-                const directions = [{x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}];
-                for (const dir of directions) {
-                    if (map[tileY + dir.y] && map[tileY + dir.y][tileX + dir.x] !== 1) {
-                        possibleWays++;
-                    }
-                }
-                return possibleWays > 2;
-            }
-
-            changeDirection(tileX, tileY) {
-                const possibleDirections = [];
-                const directions = [{x:0, y:-1, name: 'up'}, {x:0, y:1, name: 'down'}, {x:-1, y:0, name: 'left'}, {x:1, y:0, name: 'right'}];
-                
-                for(const dir of directions) {
-                    // 현재 진행 방향의 반대로는 가지 않음 (막다른 길 제외)
-                    if (dir.x === -this.direction.x && dir.y === -this.direction.y) continue;
-
-                    if (!this.isColliding(this.x, this.y, dir)) {
-                        possibleDirections.push(dir);
-                    }
-                }
-                
-                if (possibleDirections.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * possibleDirections.length);
-                    this.direction = possibleDirections[randomIndex];
-                } else {
-                    // 막다른 길이면 뒤로 돌아감
-                    this.direction.x *= -1;
-                    this.direction.y *= -1;
-                }
-            }
-            
-            isColliding(x, y, dir) {
-                const nextX = x + dir.x * this.speed;
-                const nextY = y + dir.y * this.speed;
-
-                const tileX = Math.floor(nextX / TILE_SIZE);
-                const tileY = Math.floor(nextY / TILE_SIZE);
-
-                if (dir.y !== 0) {
-                    const leftTile = Math.floor((nextX - this.radius) / TILE_SIZE);
-                    const rightTile = Math.floor((nextX + this.radius) / TILE_SIZE);
-                     if (map[tileY] && (map[tileY][leftTile] === 1 || map[tileY][rightTile] === 1)) {
-                        return true;
-                    }
-                }
-
-                if (dir.x !== 0) {
-                    const topTile = Math.floor((nextY - this.radius) / TILE_SIZE);
-                    const bottomTile = Math.floor((nextY + this.radius) / TILE_SIZE);
-                     if (map[topTile] && map[bottomTile] && (map[topTile][tileX] === 1 || map[bottomTile][tileX] === 1)) {
-                        return true;
-                    }
-                }
-                
-                return false;
-            }
-
-            returnToSpawn() {
-                const dx = this.spawnPoint.x - this.x;
-                const dy = this.spawnPoint.y - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < this.speed) {
-                    this.x = this.spawnPoint.x;
-                    this.y = this.spawnPoint.y;
-                    this.isEaten = false;
-                    this.isScared = false;
-                } else {
-                    this.x += (dx / distance) * this.speed * 2; // 스폰 지점으로 더 빨리 이동
-                    this.y += (dy / distance) * this.speed * 2;
-                }
+                return this.health <= 0;
             }
         }
 
-        function init() {
+        // Initialize stars
+        for (let i = 0; i < 100; i++) {
+            stars.push(new Star());
+        }
+
+        // Spawn enemies
+        function spawnWave() {
+            enemies = [];
+            const enemyCount = Math.min(5 + wave * 2, 20);
+            
+            for (let i = 0; i < enemyCount; i++) {
+                const x = Math.random() * (canvas.width - 30);
+                const y = -50 - (i * 40);
+                enemies.push(new Enemy(x, y, 'normal'));
+            }
+            
+            // Add boss every 5 waves
+            if (wave % 5 === 0) {
+                enemies.push(new Enemy(canvas.width / 2 - 30, -100, 'boss'));
+            }
+        }
+
+        // Draw player
+        function drawPlayer() {
+            ctx.fillStyle = '#0ff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#0ff';
+            
+            // Draw ship
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.lineTo(player.x + player.width / 2, player.y + player.height * 0.7);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw engine flame
+            ctx.fillStyle = '#ff0';
+            ctx.shadowColor = '#ff0';
+            const flameSize = Math.random() * 10 + 5;
+            ctx.fillRect(player.x + player.width / 2 - 2, player.y + player.height, 4, flameSize);
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Update game
+        function update() {
+            if (!gameRunning || gamePaused) return;
+
+            // Update stars
+            stars.forEach(star => star.update());
+
+            // Update particles
+            particles = particles.filter(particle => {
+                particle.update();
+                return particle.life > 0;
+            });
+
+            // Player movement
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Player shooting
+            player.fireRate++;
+            if (keys[' '] && player.fireRate >= player.maxFireRate) {
+                player.fireRate = 0;
+                player.bullets.push({
+                    x: player.x + player.width / 2 - 2,
+                    y: player.y,
+                    speed: 10,
+                    width: 4,
+                    height: 10
+                });
+            }
+
+            // Update player bullets
+            player.bullets = player.bullets.filter(bullet => {
+                bullet.y -= bullet.speed;
+                return bullet.y > -10;
+            });
+
+            // Update enemies
+            enemies = enemies.filter(enemy => {
+                enemy.update();
+                return enemy.y < canvas.height + 50;
+            });
+
+            // Update enemy bullets
+            enemyBullets = enemyBullets.filter(bullet => {
+                bullet.y += bullet.speed;
+                return bullet.y < canvas.height + 10;
+            });
+
+            // Check collisions - player bullets vs enemies
+            player.bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+                        
+                        if (enemy.takeDamage()) {
+                            score += enemy.points;
+                            enemies.splice(enemyIndex, 1);
+                            
+                            // Big explosion for destroyed enemy
+                            for (let i = 0; i < 20; i++) {
+                                particles.push(new Particle(
+                                    enemy.x + enemy.width / 2,
+                                    enemy.y + enemy.height / 2,
+                                    enemy.type === 'boss' ? '#f0f' : '#ff0'
+                                ));
+                            }
+                        }
+                        player.bullets.splice(bulletIndex, 1);
+                    }
+                });
+            });
+
+            // Check collisions - enemy bullets vs player
+            enemyBullets.forEach((bullet, index) => {
+                if (bullet.x < player.x + player.width &&
+                    bullet.x + bullet.width > player.x &&
+                    bullet.y < player.y + player.height &&
+                    bullet.y + bullet.height > player.y) {
+                    
+                    enemyBullets.splice(index, 1);
+                    lives--;
+                    
+                    // Player hit effect
+                    for (let i = 0; i < 15; i++) {
+                        particles.push(new Particle(
+                            player.x + player.width / 2,
+                            player.y + player.height / 2,
+                            '#0ff'
+                        ));
+                    }
+                    
+                    if (lives <= 0) {
+                        gameOver();
+                    }
+                }
+            });
+
+            // Check collisions - enemies vs player
+            enemies.forEach((enemy, index) => {
+                if (enemy.x < player.x + player.width &&
+                    enemy.x + enemy.width > player.x &&
+                    enemy.y < player.y + player.height &&
+                    enemy.y + enemy.height > player.y) {
+                    
+                    enemies.splice(index, 1);
+                    lives--;
+                    
+                    // Collision effect
+                    for (let i = 0; i < 25; i++) {
+                        particles.push(new Particle(
+                            enemy.x + enemy.width / 2,
+                            enemy.y + enemy.height / 2,
+                            '#ff0'
+                        ));
+                    }
+                    
+                    if (lives <= 0) {
+                        gameOver();
+                    }
+                }
+            });
+
+            // Check for wave completion
+            if (enemies.length === 0) {
+                wave++;
+                spawnWave();
+            }
+
+            // Update UI
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = lives;
+            document.getElementById('wave').textContent = wave;
+        }
+
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw stars
+            stars.forEach(star => star.draw());
+
+            // Draw particles
+            particles.forEach(particle => particle.draw());
+
+            // Draw player
+            if (gameRunning) {
+                drawPlayer();
+            }
+
+            // Draw player bullets
+            ctx.fillStyle = '#0ff';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#0ff';
+            player.bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+
+            // Draw enemies
+            enemies.forEach(enemy => enemy.draw());
+
+            // Draw enemy bullets
+            ctx.fillStyle = '#f00';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#f00';
+            enemyBullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+
+            ctx.shadowBlur = 0;
+
+            // Draw pause text
+            if (gamePaused) {
+                ctx.fillStyle = '#ff0';
+                ctx.font = '48px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+                ctx.font = '16px Courier New';
+                ctx.fillText('Press P to continue', canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // Restart game
+        function restart() {
+            gameRunning = true;
             score = 0;
             lives = 3;
-            pelletsCount = 0;
-            gameOver = false;
-            powerPelletActive = false;
-            messageBox.style.display = 'none';
-
-            // 맵 복사 및 펠렛 수 계산
-            map = JSON.parse(JSON.stringify(originalMap));
-            for (let y = 0; y < map.length; y++) {
-                for (let x = 0; x < map[y].length; x++) {
-                    if (map[y][x] === 0) {
-                        pelletsCount++;
-                    }
-                }
-            }
-            
-            pacman = new Pacman(TILE_SIZE * 14, TILE_SIZE * 23.5, 2);
-            ghosts = [
-                new Ghost(TILE_SIZE * 13.5, TILE_SIZE * 11.5, 1.8, 'red'), // Blinky
-                new Ghost(TILE_SIZE * 14.5, TILE_SIZE * 13.5, 1.8, 'pink'), // Pinky
-                new Ghost(TILE_SIZE * 12.5, TILE_SIZE * 13.5, 1.8, 'cyan'), // Inky
-                new Ghost(TILE_SIZE * 15.5, TILE_SIZE * 13.5, 1.8, 'orange') // Clyde
-            ];
-            
-            ghosts.forEach(ghost => ghost.changeDirection(Math.floor(ghost.x/TILE_SIZE), Math.floor(ghost.y/TILE_SIZE)));
-
-
-            updateScore();
-            updateLives();
-            canvas.focus(); // *** FIX: 게임 시작 시 캔버스에 포커스를 줍니다. ***
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            gameLoop();
-        }
-        
-        const originalMap = JSON.parse(JSON.stringify(map));
-        let animationFrameId;
-
-        function drawMap() {
-            for (let y = 0; y < map.length; y++) {
-                for (let x = 0; x < map[y].length; x++) {
-                    if (map[y][x] === 1) { // Wall
-                        ctx.fillStyle = '#0000FF';
-                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                    } else if (map[y][x] === 0) { // Dot
-                        ctx.beginPath();
-                        ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 3, 0, Math.PI * 2);
-                        ctx.fillStyle = 'white';
-                        ctx.fill();
-                    } else if (map[y][x] === 3) { // Power Pellet
-                        ctx.beginPath();
-                        ctx.arc(x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2, 7, 0, Math.PI * 2);
-                        ctx.fillStyle = 'white';
-                        ctx.fill();
-                    }
-                }
-            }
+            wave = 1;
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 60;
+            player.bullets = [];
+            enemies = [];
+            enemyBullets = [];
+            particles = [];
+            document.getElementById('gameOver').style.display = 'none';
+            spawnWave();
         }
 
-        function updateScore() {
-            scoreEl.textContent = `점수: ${score}`;
-        }
-        
-        function updateLives() {
-            livesEl.textContent = `목숨: ${lives}`;
-        }
-
-        function activatePowerPellet() {
-            powerPelletActive = true;
-            ghosts.forEach(ghost => {
-                if (!ghost.isEaten) ghost.isScared = true;
-            });
-            clearTimeout(powerPelletTimer);
-            powerPelletTimer = setTimeout(() => {
-                powerPelletActive = false;
-                ghosts.forEach(ghost => ghost.isScared = false);
-            }, 8000); // 8초간 지속
-        }
-        
-        function checkCollisions() {
-            for (const ghost of ghosts) {
-                const dx = pacman.x - ghost.x;
-                const dy = pacman.y - ghost.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < pacman.radius + ghost.radius) {
-                    if (ghost.isScared && !ghost.isEaten) {
-                        ghost.isEaten = true;
-                        score += 200;
-                        updateScore();
-                    } else if (!ghost.isScared && !ghost.isEaten) {
-                        handleDeath();
-                        return; // 한 번만 죽음 처리
-                    }
-                }
-            }
-        }
-
-        function handleDeath() {
-            lives--;
-            updateLives();
-            if (lives <= 0) {
-                endGame(false);
-            } else {
-                resetPositions();
-            }
-        }
-        
-        function resetPositions() {
-            pacman.x = TILE_SIZE * 14;
-            pacman.y = TILE_SIZE * 23.5;
-            pacman.direction = {x: 0, y: 0};
-            pacman.nextDirection = {x: 0, y: 0};
-
-            ghosts.forEach(ghost => {
-                ghost.x = ghost.spawnPoint.x;
-                ghost.y = ghost.spawnPoint.y;
-                ghost.isEaten = false;
-                ghost.isScared = false;
-            });
-        }
-
-        function endGame(isWin) {
-            gameOver = true;
-            cancelAnimationFrame(animationFrameId);
-            messageBox.style.display = 'block';
-            if (isWin) {
-                messageText.textContent = `승리! 최종 점수: ${score}`;
-            } else {
-                messageText.textContent = `게임 오버! 최종 점수: ${score}`;
-            }
-        }
-
+        // Game loop
         function gameLoop() {
-            if (gameOver) return;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawMap();
-            
-            pacman.update();
-            pacman.draw();
-
-            ghosts.forEach(ghost => {
-                ghost.update();
-                ghost.draw();
-            });
-
-            checkCollisions();
-
-            if (pelletsCount <= 0) {
-                endGame(true);
-            }
-            
-            animationFrameId = requestAnimationFrame(gameLoop);
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
         }
 
-        window.addEventListener('keydown', (e) => {
-            // e.preventDefault()는 페이지 스크롤과 같은 기본 동작을 막습니다.
-            e.preventDefault();
-            const key = e.key;
-            let nextDir = {x: 0, y: 0};
-            if (key === 'ArrowUp') nextDir = { x: 0, y: -1 };
-            if (key === 'ArrowDown') nextDir = { x: 0, y: 1 };
-            if (key === 'ArrowLeft') nextDir = { x: -1, y: 0 };
-            if (key === 'ArrowRight') nextDir = { x: 1, y: 0 };
-
-            if(nextDir.x !== 0 || nextDir.y !== 0) {
-                pacman.nextDirection = nextDir;
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            
+            if (e.key === 'p' || e.key === 'P') {
+                gamePaused = !gamePaused;
+            }
+            
+            if (e.key === ' ' && !gameRunning) {
+                restart();
             }
         });
-        
-        restartButton.addEventListener('click', init);
 
-        init();
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Start game
+        spawnWave();
+        gameLoop();
     </script>
 </body>
 </html>
